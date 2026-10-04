@@ -281,7 +281,10 @@ export function ensureDefaultPluginMarketplaces(storageRoot: string): KnownMarke
   const existingIds = new Set(known.map((record) => record.id));
   const now = new Date().toISOString();
   const missing = DEFAULT_PLUGIN_MARKETPLACES.filter(
-    (marketplace) => !existingIds.has(marketplace.id),
+    (marketplace) =>
+      // 内网离线 fork：source 为空表示未配置内网资产服务，不注册远端市场记录，
+      // 避免后续 install/validate/refresh 去请求不可达的公网 CDN。
+      marketplace.source.trim().length > 0 && !existingIds.has(marketplace.id),
   ).map(
     (marketplace): KnownMarketplaceRecord => ({
       id: marketplace.id,

@@ -209,12 +209,8 @@ export function ProviderSettingsCard({
       );
     }
   } else if (bot.provider === "telegram" && !hasSecret) {
-    control = (
-      <Button variant="outline" size="lg" onClick={onOpenTelegramBotFather}>
-        <ExternalLink className="size-4" />
-        {intl.formatMessage({ id: "bots.openBotFather" })}
-      </Button>
-    );
+    // 内网离线 fork：BotFather 外链按钮已剔除，仅保留本地二维码与凭据表单。
+    control = null;
     detail = (
       <TelegramBotFatherQrPanel
         credentialValue={credentialValue}

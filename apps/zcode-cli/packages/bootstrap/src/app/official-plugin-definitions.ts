@@ -1,4 +1,5 @@
 import { ZCODE_OFFICIAL_PLUGIN_MARKETPLACE } from "@zcode/contracts";
+import { INTRANET_ASSET_BASE_URL } from "@zcode/shared";
 
 // 内置插件的商店信息 seed（原样写入官方 marketplace.json 的条目 raw，键名与 CDN 目录
 // schema 一致：displayName_i18n / examplePrompts_i18n 等），解析复用 adapter 的
@@ -55,7 +56,11 @@ export interface OfficialPluginDefinition {
 }
 
 const ZAI_AUTHOR = { name: "Z.ai", url: "https://z.ai" } as const;
-const OFFICIAL_PLUGIN_ASSETS_BASE_URL = "https://cdn-zcode.z.ai/zcode/official-plugin/assets";
+// 内网离线 fork：插件图标 CDN 基址改为内网资产服务优先（INTRANET_MACHINE_HOST 配置时拼接），
+// 未配置时置空——PluginIcon 对非 https 的 icon 直接走本地 fallback，不再向公网 CDN 发起图片请求。
+const OFFICIAL_PLUGIN_ASSETS_BASE_URL = INTRANET_ASSET_BASE_URL
+  ? `${INTRANET_ASSET_BASE_URL}/official-plugin/assets`
+  : "";
 
 const OFFICIAL_NODE_REPL_HOST_REQUIRED_SEED_PATHS = ["dist/mcp/server.js"] as const;
 
@@ -184,7 +189,8 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
   ),
   {
     // 沿用原聚合文档插件的官方搜图能力，仅拆出独立开关；认证仍由官方 MCP adapter 注入。
-    defaultEnabled: true,
+    // 内网离线 fork：image-search 插件源码不在本仓库（构建期注入），seed 不完整，改为默认关闭。
+    defaultEnabled: false,
     listing: {
       author: ZAI_AUTHOR,
       category: "productivity",
