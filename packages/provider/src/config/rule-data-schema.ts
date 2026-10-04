@@ -102,7 +102,10 @@ export const providerTemplateConfigRuleSchema = providerTemplateDataSchema.exten
 });
 export const builtinProviderConfigRuleSchema = providerConfigRuleSchema.extend({
   config: providerConfigDataSchema.omit({ personalModelIds: true, modelOrder: true }).extend({
-    group: providerGroupDataSchema.exclude(["standard-personal"]),
+    // 内网离线 fork：builtin 层也允许 standard-personal 组，用于承载部署内置的
+    // 内网 newAPI 网关（无鉴权、openai-chat-completions），设置页归入"自定义供应商"分区。
+    // 上游约定 builtin 只能是 zai-family/bigmodel-family，恢复联机语义时需还原此行。
+    group: providerGroupDataSchema,
   }),
 });
 const personalProviderConfigRuleSchema = providerConfigRuleSchema
