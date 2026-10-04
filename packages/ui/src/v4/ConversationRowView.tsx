@@ -128,7 +128,6 @@ import {
 import { ConversationHookDetailsAction } from "@/v4/ConversationHookDetailsAction.js";
 import { formatModelChangeLabel } from "@/v4/composer/modelTriggerDisplay.js";
 import { formatMessageTimeLabel } from "@/v4/messageTimeLabel.js";
-import { parseConversationShareContext } from "@/lib/conversationShareContext.js";
 
 function RowShell({
   rowId,
@@ -873,13 +872,9 @@ const UserInputRowView = memo(function UserInputRowView({
       }),
     [bodyText, context.workspaceIdentity, context.workspacePath],
   );
-  // 只用于把历史消息里的 share URL 尾块从可见正文里剥掉。
-  // 该块已不再产出（见 ConversationComposer 的 promptText 注释）；这里保留解析，是为了让
-  // 接线修复到本次删除之间发出的消息不至于把裸 markup 当正文显示出来。
-  const parsedShareContext = useMemo(
-    () => parseConversationShareContext(parsedPrompt.visibleContent),
-    [parsedPrompt.visibleContent],
-  );
+  // 内网离线 fork：分享 URL 尾块已随会话分享功能删除，历史消息不再产生该 markup，
+  // 可见正文直接取解析结果。
+  const parsedShareContext = { visibleContent: parsedPrompt.visibleContent };
   const [editing, setEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [draft, setDraft] = useState(row.text);

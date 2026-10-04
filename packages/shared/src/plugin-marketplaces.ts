@@ -7,12 +7,13 @@ export interface DefaultPluginMarketplace {
   lastUpdated?: string;
 }
 
+import { INTRANET_ASSET_BASE_URL } from "./intranetDefaults.js";
+
 export const ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID = "zcode-plugins-official";
 
 /** Settings 三类资源发现共用；Bootstrap 单测与官方 definition 的 defaultEnabled 机械对照。 */
 export const DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS: ReadonlySet<string> = new Set([
   "browser-use@zcode-plugins-official",
-  "image-search@zcode-plugins-official",
   "documents@zcode-plugins-official",
   "pdf@zcode-plugins-official",
   "presentations@zcode-plugins-official",
@@ -29,12 +30,15 @@ export const DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS: ReadonlySet<string> = new Set(
   // bootstrap 的「Settings 默认启用集合与 CLI 的官方插件声明一致」单测机械对照两者。
 ]);
 
+// 内网离线 fork：官方市场 manifest 不再写死公网 CDN。配置了 INTRANET_MACHINE_HOST
+// 时指向内网资产服务；否则 source 为空串，ensureDefaultPluginMarketplaces 会跳过注册
+// 远端市场记录（bundled 插件的本地 seed 分片不受影响，默认启用列表照常生效）。
 export const DEFAULT_PLUGIN_MARKETPLACES: DefaultPluginMarketplace[] = [
   {
-    // ZCode 官方唯一市场：本地 seed 分片与 CDN 分片在 Agent storage 内合并。
-    // CDN manifest 的 name 必须与该 canonical id 一致。
     id: ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
-    source: "https://cdn-zcode.z.ai/zcode/official-plugin/marketplace.json",
+    source: INTRANET_ASSET_BASE_URL
+      ? `${INTRANET_ASSET_BASE_URL}/official-plugin/marketplace.json`
+      : "",
     name: ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
     description: "Official ZCode plugins marketplace: built-in and community plugins for ZCode.",
     pluginCount: 0,
