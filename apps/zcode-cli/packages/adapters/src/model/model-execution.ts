@@ -24,7 +24,6 @@ import { createAnthropicCompatFetch } from "./anthropic-stream-compat.js";
 import { createOpenAIResponsesJsonCompatFetch } from "./openai-responses-json-compat.js";
 import { createModelOptionMapFetch, type RawRequestBodyCapture } from "./model-option-map-fetch.js";
 import { createNetworkProxyFetch } from "../network/proxy-fetch.js";
-import { createOfficialCodingPlanGatewayFetch } from "./official-coding-plan-gateway.js";
 import { normalizeModelTlsFailure } from "./failure-tls.js";
 import { mergeModelRequestHeaders } from "./model-request-headers.js";
 
@@ -509,15 +508,13 @@ function createProviderProxyFetch(options: ProviderProxyFetchOptions): ProviderF
 }
 
 /**
- * 模型请求出口：官方 Coding Plan 端点经 ZCode 平台网关发送（做套餐权益校验等平台侧处理），
- * 其余 provider 直连；之后统一进入用户 HTTP 代理 fetch，httpProxy / noProxy 按实际发送地址判定。
- * 官方端点与网关端点的对应关系见 official-coding-plan-gateway.ts。
+ * 模型请求出口：所有 provider 直连，统一进入用户 HTTP 代理 fetch，
+ * httpProxy / noProxy 按实际发送地址判定。
+ * 内网离线 fork：官方 Coding Plan 网关改写已整体移除（official-coding-plan-gateway.ts 已删除），
+ * 内网部署的模型端点由 provider 配置的 baseUrl 直接决定。
  */
 function createProviderTransportFetch(options: ProviderProxyFetchOptions): ProviderFetch {
-  return createOfficialCodingPlanGatewayFetch({
-    env: options.env,
-    fetch: createProviderProxyFetch(options),
-  });
+  return createProviderProxyFetch(options);
 }
 
 async function detectProviderBusinessError(
