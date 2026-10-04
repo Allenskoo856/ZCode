@@ -1,0 +1,90 @@
+# 构建 Linux 桌面端安装包（用于 UOS 1070 / 麒麟 V10 等 glibc 2.28 基座的国产系统）。
+#
+# 产物兼容性依据（已实测验证）：
+# - Electron 41.0.3 官方 Linux 二进制引用的 glibc 符号上限为 2.25（x64/arm64 相同）；
+# - 打进安装包的 node-pty 预编译产物来自 @lydell/node-pty-linux-*（glibc 上限 2.28），
+#   由 electron-builder.config.js 的 restoreTargetNodePtyPrebuild 强制还原，与 runner 的
+#   glibc 版本无关（install 阶段本机 rebuild 出的二进制不会进入安装包）；
+# - 因此在 ubuntu-latest（glibc 2.39）上构建的产物可运行于 glibc 2.28 的目标系统。
+#
+# 使用方式：Actions 页面手动触发（workflow_dispatch），产物在 run 的 Artifacts 里下载。
+# UOS 1070 优先安装 .deb（UOS 基于 Debian）；AppImage 需要 libfuse2。
+
+name: Build Linux Desktop
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: "目标 CPU 架构（UOS x86 机器选 x64）"
+        type: choice
+        default: x64
+        options:
+          - x64
+          - arm64
+      include_remote_assets:
+        description: "打包远程工作区资源（SSH/WSL 远程功能）。关闭可显著缩短构建时间；运行时回退 CDN 按版本自动推导"
+        type: boolean
+        default: false
+
+jobs:
+  build-linux-desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+
+    env:
+      ZCODE_TARGET_OS: linux
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: pnpm
+
+      - name: Cache Electron / electron-builder binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: electron-cache-${{ runner.os }}-41.0.3
+          restore-keys: |
+            electron-cache-${{ runner.os }}-
+
+      - name: Install dependencies and build workspace packages
+        run: pnpm bootstrap
+        env:
+          # 默认跳过远程资源准备（与仓库 Windows 打包 job 同策略）；
+          # 需要把 SSH/WSL 远程功能资源打进安装包时，在触发参数里打开。
+          ZCODE_SKIP_REMOTE_ASSETS: ${{ inputs.include_remote_assets == true && '0' || '1' }}
+
+      - name: Bundle desktop app
+        run: pnpm bundle:desktop -- --os linux --arch "${{ inputs.arch || 'x64' }}"
+        env:
+          ZCODE_SKIP_REMOTE_ASSETS: ${{ inputs.include_remote_assets == true && '0' || '1' }}
+
+      - name: List artifacts
+        run: ls -lh packages/desktop/dist/ | grep -E "\.(deb|AppImage|rpm|pkg\.tar\.zst|yml)$" || true
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-desktop-${{ inputs.arch || 'x64' }}-${{ github.sha }}
+          path: |
+            packages/desktop/dist/*.deb
+            packages/desktop/dist/*.AppImage
+            packages/desktop/dist/*.rpm
+            packages/desktop/dist/*.pkg.tar.zst
+            packages/desktop/dist/latest-linux.yml
+          if-no-files-found: error
