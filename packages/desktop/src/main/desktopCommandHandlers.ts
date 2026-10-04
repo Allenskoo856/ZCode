@@ -12,6 +12,7 @@ import {
   type Locale,
   resolveRuntimeZCodeEndpointOrigin,
   ZCODE_ENV,
+  ZCODE_OFFLINE_MODE,
   ZCODE_PRODUCT_FLAVOR,
   buildZCodeEndpointUrls,
   getCommunityUrlFromConfigs,
@@ -590,7 +591,10 @@ export async function executeDesktopCommand(options: {
       return;
     case DesktopCommandIds.CheckForUpdates:
       // 按产品身份而不是后端环境放行：生产后端的 Preview 同样没有更新器。
-      if (ZCODE_PRODUCT_FLAVOR === "production") {
+      // 内网离线部署再兜一层：更新链路未初始化时禁止任何手动触发到达 electron-updater。
+      if (ZCODE_OFFLINE_MODE) {
+        options.logger.info("[auto-update] 离线模式已禁用手动更新检查");
+      } else if (ZCODE_PRODUCT_FLAVOR === "production") {
         checkForUpdateMenuClick(targetWindow);
       } else {
         options.logger.info("[auto-update] Preview 已禁用手动更新检查");

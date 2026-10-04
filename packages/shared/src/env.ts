@@ -57,6 +57,27 @@ export const ZCODE_TELEMETRY_REPORT_ENDPOINT =
 export const ZCODE_ARMS_RUM_ENDPOINT =
   typeof process !== "undefined" ? (process.env.ZCODE_ARMS_RUM_ENDPOINT ?? "") : "";
 
+// ── 内网离线模式（intranet fork 专属）──
+// 本分支面向不允许任何主动外联的内网部署：ZCODE_OFFLINE 未设置时默认离线，
+// 显式设 ZCODE_OFFLINE=0/false/off/no 才恢复联机行为（自动更新、内置目录远端刷新等）。
+// 新增任何"启动即外联"的链路必须先经过 ZCODE_OFFLINE_MODE 判断，禁止绕过。
+export const ZCODE_OFFLINE_ENV = "ZCODE_OFFLINE" as const;
+
+function isExplicitOnlineFlag(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "0" || normalized === "false" || normalized === "off" || normalized === "no";
+}
+
+/** 从给定环境记录解析离线开关；供 bootstrap/desktop 传入自身 env 快照使用 */
+export function resolveZCodeOfflineMode(
+  env: Readonly<Record<string, string | undefined>> = {},
+): boolean {
+  return !isExplicitOnlineFlag(env[ZCODE_OFFLINE_ENV]);
+}
+
+export const ZCODE_OFFLINE_MODE: boolean =
+  typeof process !== "undefined" ? resolveZCodeOfflineMode(process.env) : true;
+
 /** 将本地运行态与编译期 ZCODE_ENV 映射为 ARMS 控制台识别的上报环境标签 */
 export function mapZCodeEnvToArmsRumEnv(runtimeEnv: ZCodeRuntimeEnv): ArmsRumEnv {
   return runtimeEnv !== "development" && ZCODE_ENV === "production" ? "prod" : "local";

@@ -8,6 +8,7 @@ import {
 import {
   isBuiltinModelProviderId,
   resolveRuntimeZCodeEndpointOrigin,
+  resolveZCodeOfflineMode,
   ZCODE_VERSION,
 } from "@zcode/shared";
 import { dirname, join } from "node:path";
@@ -65,22 +66,28 @@ export async function startProcessProviderRegistryRuntime(
       ? {
           zcodeBuiltinFilePath: bundledFile,
           zcodeBuiltinActiveFilePath: paths.zcodeBuiltinFilePath,
-          zcodeBuiltinRemote: {
-            controlFilePath: join(
-              dirname(paths.zcodeBuiltinFilePath),
-              "zcode-builtin-refresh.json",
-            ),
-            resolveEndpointKey: () => resolveRuntimeZCodeEndpointOrigin(env),
-            fetchRelease: (endpointOrigin, signal) =>
-              downloadZCodeBuiltinRelease({
-                endpointOrigin,
-                signal,
-                appVersion: ZCODE_VERSION,
-                platform: resolveZCodeBuiltinClientPlatform(),
-                request: options.standalone?.request ?? globalThis.fetch,
+          // 内网离线部署（ZCODE_OFFLINE 默认开启）：禁止启动即外联，不创建内置目录
+          // 远端同步器——bundled 文件直接生效，启动请求与 60s 周期轮询随之消失。
+          ...(resolveZCodeOfflineMode(env)
+            ? {}
+            : {
+                zcodeBuiltinRemote: {
+                  controlFilePath: join(
+                    dirname(paths.zcodeBuiltinFilePath),
+                    "zcode-builtin-refresh.json",
+                  ),
+                  resolveEndpointKey: () => resolveRuntimeZCodeEndpointOrigin(env),
+                  fetchRelease: (endpointOrigin, signal) =>
+                    downloadZCodeBuiltinRelease({
+                      endpointOrigin,
+                      signal,
+                      appVersion: ZCODE_VERSION,
+                      platform: resolveZCodeBuiltinClientPlatform(),
+                      request: options.standalone?.request ?? globalThis.fetch,
+                    }),
+                  onRefreshResult: options.standalone?.onBuiltinRefreshResult,
+                },
               }),
-            onRefreshResult: options.standalone?.onBuiltinRefreshResult,
-          },
         }
       : {}),
     onZCodeBuiltinRefreshError: options.standalone?.onBuiltinRefreshError,

@@ -46,7 +46,7 @@ import {
 import type { UtilityProcess as ElectronUtilityProcess } from "electron";
 import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
-import { homedir, hostname } from "node:os";
+import { homedir } from "node:os";
 import {
   createCredentialService,
   createSettingService,
@@ -68,13 +68,13 @@ import {
   type AppSettings,
   PlatformChannels,
   ZCODE_ENV,
+  ZCODE_OFFLINE_MODE,
   ZCODE_PRODUCT_FLAVOR,
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
   DEFAULT_LOCALE,
   ZCODE_VERSION,
   ZCODE_TELEMETRY_ENABLED,
   ZCODE_ARMS_RUM_ENDPOINT,
-  buildZCodeEndpointUrls,
   resolveZCodeEndpointOrigin,
   shouldEnableE2ETestBridge,
   type UpdateStatePayload,
@@ -112,7 +112,6 @@ import {
   type AppShutdownKind,
 } from "./appShutdownPolicy.js";
 import { createPrimaryWindowCoordinator } from "./primaryWindowCoordinator.js";
-import { createTempTextAttachment } from "./tempTextAttachment.js";
 import { flushMainE2ECoverage } from "./e2eCoverage.js";
 import { resolveStartupWindowBootstrap, type StartupWindowBootstrap } from "./startupWorkspace.js";
 import {
@@ -199,11 +198,6 @@ import {
 } from "./resourceManagerWindow.js";
 import { createDesktopHelpConfigReader } from "./desktopHelpConfig.js";
 import { registerPlatformIpcHandlers } from "./desktopMainIpcPlatform.js";
-import {
-  loadCliMcpFromUserDirectory,
-  migrateLegacyCommonMcp,
-  saveCliMcpToUserDirectory,
-} from "./mcpUserDirectory/index.js";
 import { registerRemoteIpcHandlers } from "./desktopMainIpcRemote.js";
 import {
   configureDesktopStabilityTelemetry,
@@ -2012,24 +2006,28 @@ app.whenReady().then(async () => {
   // 启动自动更新检查（后台执行，不阻塞主界面）
   // Preview 身份无论连接哪个后端都不自动更新：stable feed 上只分发正式 ZCode 安装包，
   // 不向 Preview 渠道提供更新。
-  void initAutoUpdater({
-    enabled: ZCODE_PRODUCT_FLAVOR === "production",
-    onBeforeQuitAndInstall: async () => {
-      notifyStabilityLifecycle("update_install");
-      await prepareAppQuit("auto-update quitAndInstall", "update-install");
-      if (process.platform === "win32") {
-        await prepareWindowsProcessesForUpdateInstall();
-      }
-    },
-    settingService: mainSettingService,
-    locale: currentApplicationLocale,
-    deviceMid,
-    resolveEndpointOrigin: resolveCurrentZCodeEndpointOrigin,
-    updateFeedSource: resolveUpdateFeedSourceFromStartupConfig({
-      argv: process.argv,
-      env: process.env,
-    }),
-  });
+  // 内网离线部署（ZCODE_OFFLINE 默认开启）：electron-updater 会请求打包内置
+  // app-update.yml 指向的更新源，离线模式整个更新链路不初始化，UI 也不会收到更新状态。
+  if (!ZCODE_OFFLINE_MODE) {
+    void initAutoUpdater({
+      enabled: ZCODE_PRODUCT_FLAVOR === "production",
+      onBeforeQuitAndInstall: async () => {
+        notifyStabilityLifecycle("update_install");
+        await prepareAppQuit("auto-update quitAndInstall", "update-install");
+        if (process.platform === "win32") {
+          await prepareWindowsProcessesForUpdateInstall();
+        }
+      },
+      settingService: mainSettingService,
+      locale: currentApplicationLocale,
+      deviceMid,
+      resolveEndpointOrigin: resolveCurrentZCodeEndpointOrigin,
+      updateFeedSource: resolveUpdateFeedSourceFromStartupConfig({
+        argv: process.argv,
+        env: process.env,
+      }),
+    });
+  }
 
   if (process.platform === "darwin" || process.platform === "win32") {
     app.clearRecentDocuments();
@@ -2256,16 +2254,19 @@ app.whenReady().then(async () => {
   // gate 照常生效，对真实用户零影响。
   const skipForceUpdateForLocalDevRuntime = !app.isPackaged;
   const forceUpdateGuardResult =
-    ZCODE_PRODUCT_FLAVOR === "production" && !skipForceUpdateForLocalDevRuntime
-      ? await maybeBlockStartupForForceUpdate({
+    // 内网离线部署：强更 gate 需要请求更新 manifest，离线模式直接跳过。
+    ZCODE_OFFLINE_MODE ||
+    ZCODE_PRODUCT_FLAVOR !== "production" ||
+    skipForceUpdateForLocalDevRuntime
+      ? { blocked: false }
+      : await maybeBlockStartupForForceUpdate({
           locale: currentApplicationLocale,
           logger,
           endpointOrigin: await resolveCurrentZCodeEndpointOrigin(),
           onBlocked: () => {
             forceUpdateMainWindowCreationBlocked = true;
           },
-        })
-      : { blocked: false };
+        });
   if (ZCODE_PRODUCT_FLAVOR !== "production") {
     logger.info("[force-update] Preview 跳过远端强制升级检查");
   } else if (skipForceUpdateForLocalDevRuntime) {
